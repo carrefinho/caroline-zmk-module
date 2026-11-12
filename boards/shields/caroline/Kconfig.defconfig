@@ -1,0 +1,9 @@
+# Copyright (c) 2026 carrefinho
+# SPDX-License-Identifier: MIT
+
+if SHIELD_CAROLINE
+
+config ZMK_KEYBOARD_NAME
+    default "Caroline"
+
+endif

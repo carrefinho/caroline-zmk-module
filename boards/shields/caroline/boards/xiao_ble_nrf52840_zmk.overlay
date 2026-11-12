@@ -1,0 +1,121 @@
+/*
+ * Copyright (c) 2026 carrefinho
+ * SPDX-License-Identifier: MIT
+ *
+ * Caroline with a Seeed XIAO nRF52840 Plus. 36 EC keys, 4 sense rows x 10 strobed columns, no analog front end.
+ * The board's rows are this driver's columns (sense lines, on the SAADC) and
+ * its columns are this driver's strobes; the transform below swaps them back.
+ *
+ * JP1-JP4 must be bridged A-C: each row's left half is tied to its right half
+ * on D0-D3, so a line carries ten keys. The ROWn_L_AIN pads (D10-D7) are then
+ * open stubs and stay unconfigured.
+ *
+ *   ROW0 -> D0  P0.02 AIN0     COL0 -> P1.03    COL5 -> P0.09 (NFC1)
+ *   ROW1 -> D1  P0.03 AIN1     COL1 -> P1.05    COL6 -> D4  P0.04
+ *   ROW2 -> D2  P0.28 AIN4     COL2 -> P1.07    COL7 -> P0.10 (NFC2)
+ *   ROW3 -> D3  P0.29 AIN5     COL3 -> P0.19    COL8 -> D5  P0.05
+ *                              COL4 -> P0.15    COL9 -> D6  P1.11
+ *
+ * The P1.03 / P1.07 order on the D10-D7 edge follows the Xiao_nRF52840_Plus
+ * symbol and footprint, which is the one place Seeed's wiki picture disagrees
+ * with them.
+ *
+ * THIS BUILDS ON xiao_ble//zmk, the non-Plus board. The extra castellations
+ * are plain GPIOs it does not describe, addressed as &gpio0 / &gpio1. Also
+ * disabled: uart0 (P1.11/P1.12), i2c1 (P0.04/P0.05), spi2
+ * (P1.13-15, the open stubs), Zephyr's adc (this driver owns the SAADC) and
+ * the board's battery divider on the same SAADC. The same divider is read by
+ * the scan thread instead, through ec_battery below.
+ */
+
+#include <dt-bindings/zmk/matrix_transform.h>
+
+&adc { status = "disabled"; };
+&vbatt { status = "disabled"; };
+&uart0 { status = "disabled"; };
+&i2c1 { status = "disabled"; };
+&spi2 { status = "disabled"; };
+
+/* COL5 and COL7 are the NFC antenna pins. The MDK startup writes
+ * UICR.NFCPINS and resets once, so a fresh XIAO boots twice the first time. */
+&uicr {
+	nfct-pins-as-gpios;
+};
+
+/ {
+	chosen {
+		zmk,physical-layout = &ec_layout;
+		zmk,battery = &ec_battery;
+	};
+
+	/* The board's divider (see &vbatt in xiao_ble_zmk.dts), read between
+	 * tripwire passes by the scan thread. */
+	ec_battery: ec_battery {
+		compatible = "zmk,ec-direct-battery";
+		ain-channel = <7>;                      /* P0.31 */
+		power-gpios = <&gpio0 14 (GPIO_OPEN_DRAIN | GPIO_ACTIVE_LOW)>;
+		output-ohms = <510000>;
+		full-ohms = <(1000000 + 510000)>;
+	};
+
+	ec_kscan: ec_kscan {
+		compatible = "zmk,kscan-ec-direct";
+
+		/* Same four pins twice: once as AIN indices, once as GPIOs.
+		 * Order must match; the driver checks the correspondence. */
+		ain-channels = <0 1 4 5>;               /* ROW0..ROW3 */
+		col-gpios
+			= <&xiao_d 0 GPIO_ACTIVE_HIGH>      /* ROW0, P0.02 */
+			, <&xiao_d 1 GPIO_ACTIVE_HIGH>      /* ROW1, P0.03 */
+			, <&xiao_d 2 GPIO_ACTIVE_HIGH>      /* ROW2, P0.28 */
+			, <&xiao_d 3 GPIO_ACTIVE_HIGH>      /* ROW3, P0.29 */
+			;
+
+		strobe-gpios
+			= <&gpio1 3 GPIO_ACTIVE_HIGH>       /* COL0 */
+			, <&gpio1 5 GPIO_ACTIVE_HIGH>       /* COL1 */
+			, <&gpio1 7 GPIO_ACTIVE_HIGH>       /* COL2 */
+			, <&gpio0 19 GPIO_ACTIVE_HIGH>      /* COL3 */
+			, <&gpio0 15 GPIO_ACTIVE_HIGH>      /* COL4 */
+			, <&gpio0 9 GPIO_ACTIVE_HIGH>       /* COL5, NFC1 */
+			, <&xiao_d 4 GPIO_ACTIVE_HIGH>      /* COL6, P0.04 */
+			, <&gpio0 10 GPIO_ACTIVE_HIGH>      /* COL7, NFC2 */
+			, <&xiao_d 5 GPIO_ACTIVE_HIGH>      /* COL8, P0.05 */
+			, <&xiao_d 6 GPIO_ACTIVE_HIGH>      /* COL9, P1.11 */
+			;
+
+		/*
+		 * Cut from the assembled board, on battery. Raw, a key
+		 * pressed alone reads 227-353 over released (median 304). Each
+		 * held key takes 5-9 % off the others on its ten-key line: with
+		 * the whole top row down Q went 266 -> 147.
+		 *
+		 * load-comp-scale 3600 was fitted on that ten-key run (the
+		 * minimum is broad, 3300-3900): corrected, Q stays at 278-303
+		 * from one key held to ten. Compensated lone presses are 247-402
+		 * (median 340), so 110 is ~45 % of the weakest key. It also has
+		 * to clear the next-row bump, ~7 % of a press (under 30), and
+		 * idle noise, ~12 counts peak-to-peak at rest and up to 1.8x
+		 * that with a whole row held.
+		 */
+		press-threshold = <110>;
+		release-threshold = <70>;
+		load-comp-scale = <3600>;
+
+		/* 250 Hz. See the conf for the pass time. */
+		poll-interval-ms = <4>;
+	};
+
+	ec_transform: ec_transform {
+		compatible = "zmk,matrix-transform";
+		columns = <4>;
+		rows = <10>;
+		/* RC(strobe, sense) = RC(board column, board row) */
+		map = <
+			RC(0,0) RC(1,0) RC(2,0) RC(3,0) RC(4,0) RC(5,0) RC(6,0) RC(7,0) RC(8,0) RC(9,0)
+			RC(0,1) RC(1,1) RC(2,1) RC(3,1) RC(4,1) RC(5,1) RC(6,1) RC(7,1) RC(8,1) RC(9,1)
+			RC(0,2) RC(1,2) RC(2,2) RC(3,2) RC(4,2) RC(5,2) RC(6,2) RC(7,2) RC(8,2) RC(9,2)
+			RC(0,3)                 RC(3,3) RC(4,3) RC(5,3) RC(6,3)                 RC(9,3)
+		>;
+	};
+};

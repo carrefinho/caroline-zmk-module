@@ -1,0 +1,143 @@
+/*
+ * Copyright (c) 2026 carrefinho
+ * SPDX-License-Identifier: MIT
+ *
+ * Caroline with a Seeed XIAO RP2040 Plus.
+ * 36 EC keys, 4 sense rows x 10 strobed columns, no analog front end. The
+ * board's rows are this driver's columns (sense lines, on the ADC) and its
+ * columns are this driver's strobes; the transform below swaps them back.
+ *
+ * JP1-JP4 must be bridged A-C: RP2040 has only four ADC inputs, so each
+ * row's left half is tied to its right half on D0-D3 and a line carries ten
+ * keys. The ROWn_L_AIN pads (D10-D7) are then open stubs and stay untouched.
+ *
+ *   ROW0 -> D0  GPIO26 AINSEL 0     COL0 -> D27 GPIO8    COL5 -> D22 GPIO15
+ *   ROW1 -> D1  GPIO27 AINSEL 1     COL1 -> D26 GPIO9    COL6 -> D4  GPIO6
+ *   ROW2 -> D2  GPIO28 AINSEL 2     COL2 -> D25 GPIO10   COL7 -> D23 GPIO16
+ *   ROW3 -> D3  GPIO29 AINSEL 3     COL3 -> D20 GPIO13   COL8 -> D5  GPIO7
+ *                                   COL4 -> D19 GPIO5    COL9 -> D6  GPIO0
+ *
+ * Pad positions from the PCB footprint (Xiao_nRF52840_Plus: pads 15-20 are
+ * the D19-D24 interstitials on the D0-D6 edge, 21-23 are D25-D27 on the other
+ * edge), GPIOs from the XIAO RP2040 Plus schematic V1.0 p.5.
+ *
+ * THIS BUILDS ON THE PLAIN xiao_rp2040 BOARD, which does not describe the
+ * Plus. The fixes below are the gap between the two:
+ *
+ *  - D3 reaches GPIO29 through an SGM48756 analog switch (U5). IN = GPIO24
+ *    (BAT_EN); low connects the D3 pad (NC), high connects the battery
+ *    divider (NO). The hog holds it low. The switch also sits in series with
+ *    ROW3, so that line carries its on-capacitance and leakage and may read
+ *    differently from ROW0-2.
+ *  - The plain board has a three-colour LED on GPIO16/17/25. The Plus has
+ *    only a green user LED on GPIO25 (through a FET, active high) and brings
+ *    GPIO16/17 out as D23/D24. GPIO16 is COL7 here, so the gpio-leds node
+ *    goes, or anything that drives led1 fights the strobe.
+ *  - i2c1 (GPIO6/7 = COL6/COL8), spi0 (GPIO2-4) and uart0 (GPIO0/1 = COL9)
+ *    are the plain board's defaults on pads this board strobes or leaves
+ *    open. The Zephyr ADC driver goes too: this driver owns the converter.
+ */
+
+#include <dt-bindings/zmk/matrix_transform.h>
+
+&adc { status = "disabled"; };
+&i2c1 { status = "disabled"; };
+&spi0 { status = "disabled"; };
+&uart0 { status = "disabled"; };
+
+&gpio0 {
+	bat-en-select-d3 {
+		gpio-hog;
+		gpios = <24 GPIO_ACTIVE_HIGH>;
+		output-low;
+	};
+};
+
+/* uart0 was the console. This puts it, and the `ecd` shell when enabled, on
+ * CDC ACM over the USB device ZMK already runs. */
+&zephyr_udc0 {
+	cdc_acm_uart0: cdc_acm_uart0 {
+		compatible = "zephyr,cdc-acm-uart";
+	};
+};
+
+/ {
+	leds {
+		status = "disabled";
+	};
+
+	chosen {
+		zephyr,console = &cdc_acm_uart0;
+		zephyr,shell-uart = &cdc_acm_uart0;
+		zmk,physical-layout = &ec_layout;
+	};
+
+	ec_kscan: ec_kscan {
+		compatible = "zmk,kscan-ec-direct";
+
+		/* Same four pins, twice: once as AINSEL, once as GPIOs. Order
+		 * must match; the backend checks the correspondence. */
+		ain-channels = <0 1 2 3>;               /* ROW0..ROW3 */
+		col-gpios
+			= <&gpio0 26 GPIO_ACTIVE_HIGH>      /* ROW0, D0 */
+			, <&gpio0 27 GPIO_ACTIVE_HIGH>      /* ROW1, D1 */
+			, <&gpio0 28 GPIO_ACTIVE_HIGH>      /* ROW2, D2 */
+			, <&gpio0 29 GPIO_ACTIVE_HIGH>      /* ROW3, D3 via U5, BAT_EN low */
+			;
+
+		strobe-gpios
+			= <&gpio0 8 GPIO_ACTIVE_HIGH>       /* COL0, D27 */
+			, <&gpio0 9 GPIO_ACTIVE_HIGH>       /* COL1, D26 */
+			, <&gpio0 10 GPIO_ACTIVE_HIGH>      /* COL2, D25 */
+			, <&gpio0 13 GPIO_ACTIVE_HIGH>      /* COL3, D20 */
+			, <&gpio0 5 GPIO_ACTIVE_HIGH>       /* COL4, D19 */
+			, <&gpio0 15 GPIO_ACTIVE_HIGH>      /* COL5, D22 */
+			, <&gpio0 6 GPIO_ACTIVE_HIGH>       /* COL6, D4 */
+			, <&gpio0 16 GPIO_ACTIVE_HIGH>      /* COL7, D23 */
+			, <&gpio0 7 GPIO_ACTIVE_HIGH>       /* COL8, D5 */
+			, <&gpio0 0 GPIO_ACTIVE_HIGH>       /* COL9, D6 */
+			;
+
+		/*
+		 * Cut from the assembled board. Raw, a key pressed
+		 * alone reads 165-327 over released (median 262; the thumb row,
+		 * behind the analog switch on D3, is the low line at 190-234), and
+		 * ten held on one line leaves 60 % of that.
+		 *
+		 * load-comp-scale corrects it. 4000 was fitted on a ten-key roll
+		 * of the top row (the minimum is broad, 3800-4400) and checked on
+		 * the board: each key stays within a few percent from one held to
+		 * ten, unpressed keys within +-10, and the six-key thumb row is as
+		 * flat with the same K. Compensated, the weakest keys read ~190.
+		 */
+		press-threshold = <100>;
+		release-threshold = <65>;
+		load-comp-scale = <4000>;
+
+		/*
+		 * Pull-down prime, two primes, no
+		 * dwell (the fixed 2 us conversion is the only window). settle-us 0
+		 * was checked on the bare board against 200: resting levels moved
+		 * -1.4 on average (sd 2.9, one grid each) and idle sd did not.
+		 */
+		bias-us = <0>;
+		prime-conversions = <2>;
+		settle-us = <0>;
+
+		/* 250 Hz: 36 cells x NAVG 4 x 12.5 us is a 1.8 ms pass, measured. */
+		poll-interval-ms = <4>;
+	};
+
+	ec_transform: ec_transform {
+		compatible = "zmk,matrix-transform";
+		columns = <4>;
+		rows = <10>;
+		/* RC(strobe, sense) = RC(board column, board row) */
+		map = <
+			RC(0,0) RC(1,0) RC(2,0) RC(3,0) RC(4,0) RC(5,0) RC(6,0) RC(7,0) RC(8,0) RC(9,0)
+			RC(0,1) RC(1,1) RC(2,1) RC(3,1) RC(4,1) RC(5,1) RC(6,1) RC(7,1) RC(8,1) RC(9,1)
+			RC(0,2) RC(1,2) RC(2,2) RC(3,2) RC(4,2) RC(5,2) RC(6,2) RC(7,2) RC(8,2) RC(9,2)
+			RC(0,3)                 RC(3,3) RC(4,3) RC(5,3) RC(6,3)                 RC(9,3)
+		>;
+	};
+};

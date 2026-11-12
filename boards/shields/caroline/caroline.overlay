@@ -1,0 +1,59 @@
+/*
+ * Copyright (c) 2026 carrefinho
+ * SPDX-License-Identifier: MIT
+ *
+ * Key positions, the same on every controller. boards/<board>.overlay
+ * supplies ec_kscan and ec_transform for the XIAO in the socket.
+ */
+
+#include <physical_layouts.dtsi>
+
+/ {
+	/* The kscan goes in `input` here and nowhere else: no `kscan` property,
+	 * and no zmk,kscan or zmk,matrix-transform in chosen. */
+	ec_layout: ec_layout {
+		compatible = "zmk,physical-layout";
+		display-name = "Caroline";
+		transform = <&ec_transform>;
+		input = <&ec_kscan>;
+
+		keys  //                     w       h       x       y     rot      rx      ry
+			= <&key_physical_attrs     100     100      40       0       0       0       0>  /* Q */
+			, <&key_physical_attrs     100     100     144       5     530     194      55>  /* W */
+			, <&key_physical_attrs     100     100     247      21    1200     297      71>  /* E */
+			, <&key_physical_attrs     100     100     345      41    1200     395      91>  /* R */
+			, <&key_physical_attrs     100     100     443      62    1200     493     112>  /* T */
+			, <&key_physical_attrs     100     100     633      62 (-1200)     683     112>  /* Y */
+			, <&key_physical_attrs     100     100     731      41 (-1200)     781      91>  /* U */
+			, <&key_physical_attrs     100     100     828      21 (-1200)     878      71>  /* I */
+			, <&key_physical_attrs     100     100     931       5  (-530)     981      55>  /* O */
+			, <&key_physical_attrs     100     100    1035       0       0       0       0>  /* P */
+			, <&key_physical_attrs     125     100      20      98       0       0       0>  /* A */
+			, <&key_physical_attrs     100     100     150     106     770     200     156>  /* S */
+			, <&key_physical_attrs     100     100     251     124    1200     301     174>  /* D */
+			, <&key_physical_attrs     100     100     349     144    1200     399     194>  /* F */
+			, <&key_physical_attrs     100     100     446     165    1200     496     215>  /* G */
+			, <&key_physical_attrs     100     100     629     165 (-1200)     679     215>  /* H */
+			, <&key_physical_attrs     100     100     727     144 (-1200)     777     194>  /* J */
+			, <&key_physical_attrs     100     100     825     124 (-1200)     875     174>  /* K */
+			, <&key_physical_attrs     100     100     925     106  (-770)     975     156>  /* L */
+			, <&key_physical_attrs     125     100    1030      98       0       0       0>  /* ; */
+			, <&key_physical_attrs     100     100       0     197       0       0       0>  /* Z */
+			, <&key_physical_attrs     100     100     103     200     540     153     250>  /* X */
+			, <&key_physical_attrs     100     100     205     216    1200     255     266>  /* C */
+			, <&key_physical_attrs     100     100     303     237    1200     353     287>  /* V */
+			, <&key_physical_attrs     100     100     401     258    1200     451     308>  /* B */
+			, <&key_physical_attrs     100     100     674     258 (-1200)     724     308>  /* Enc */
+			, <&key_physical_attrs     100     100     772     237 (-1200)     822     287>  /* N */
+			, <&key_physical_attrs     100     100     870     216 (-1200)     920     266>  /* M */
+			, <&key_physical_attrs     100     100     972     200  (-540)    1022     250>  /* , */
+			, <&key_physical_attrs     100     100    1075     197       0       0       0>  /* . */
+			, <&key_physical_attrs     125     100      12     297       0       0       0>  /* LCtrl */
+			, <&key_physical_attrs     125     100     282     337    1200     345     387>  /* LMod */
+			, <&key_physical_attrs     150     100     404     366    1200     479     416>  /* LSpc */
+			, <&key_physical_attrs     150     100     621     366 (-1200)     696     416>  /* RSpc */
+			, <&key_physical_attrs     125     100     768     337 (-1200)     831     387>  /* RMod */
+			, <&key_physical_attrs     125     100    1038     297       0       0       0>  /* RCtrl */
+			;
+	};
+};

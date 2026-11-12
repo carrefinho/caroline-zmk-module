@@ -1,0 +1,156 @@
+/*
+ * Copyright (c) 2026 carrefinho
+ * SPDX-License-Identifier: MIT
+ *
+ * Caroline with a Seeed XIAO SAMD21 Plus.
+ * 36 EC keys, no analog front end. The board's rows are this driver's columns
+ * (sense lines, on the ADC) and its columns are this driver's strobes; the
+ * transform below swaps them back.
+ *
+ * JP1-JP4 must be bridged C-B: each row's left half then has its own ADC pad
+ * on D10-D7 and the right half stays on D0-D3, so there are eight sense lines
+ * of at most five keys each.
+ *
+ *   ROW0_R -> D0  PA02 MUXPOS 0      COL0 -> D27 PA18    COL5 -> D22 PB10
+ *   ROW1_R -> D1  PA04 MUXPOS 4      COL1 -> D26 PA22    COL6 -> D4  PA08
+ *   ROW2_R -> D2  PA10 MUXPOS 18     COL2 -> D25 PA23    COL7 -> D23 PB11
+ *   ROW3_R -> D3  PA11 MUXPOS 19     COL3 -> D20 PA20    COL8 -> D5  PA09
+ *   ROW0_L -> D10 PA06 MUXPOS 6      COL4 -> D19 PA19    COL9 -> D6  PB08
+ *   ROW1_L -> D9  PA05 MUXPOS 5
+ *   ROW2_L -> D8  PA07 MUXPOS 7
+ *   ROW3_L -> D7  PB09 MUXPOS 3
+ *
+ * Pad positions from the PCB footprint (Xiao_nRF52840_Plus: pads 15-20 are
+ * the interstitials on the D0-D6 edge, 21-23 the ones on the D10-D7 edge,
+ * with 21 between D10 and D9), matched by position against Seeed's Plus
+ * pinout (D25 between D10 and D9, D27 between D8 and D7). Seeed's own header
+ * symbol numbers that edge the other way round (21 = D27), so go by position.
+ *
+ * THIS BUILDS ON seeeduino_xiao, the original XIAO SAMD21. Same chip and same
+ * front pads; the gaps that matter here:
+ *
+ *  - The original has LEDs on PA17/PA18/PA19. On the Plus PA18 and PA19 are
+ *    pads, COL0 and COL4 here, so the gpio-leds node goes.
+ *  - dac0 (PA02), sercom0 (PA05-PA07), sercom2 (PA08/PA09) and sercom4
+ *    (PB08/PB09, the default console) all sit on pads this board senses or
+ *    strobes. The Zephyr ADC driver goes too: this driver owns the converter.
+ *  - The extra castellations are not in the xiao_d connector map, so they are
+ *    addressed as &porta / &portb directly.
+ */
+
+#include <dt-bindings/zmk/matrix_transform.h>
+
+&dac0 { status = "disabled"; };
+&sercom0 { status = "disabled"; };
+&sercom2 { status = "disabled"; };
+&sercom4 { status = "disabled"; };
+&adc { status = "disabled"; };
+
+/* sercom4 was the console. This puts it, and the `ecd` shell when enabled,
+ * on CDC ACM over the USB device ZMK already runs. */
+&zephyr_udc0 {
+	cdc_acm_uart0: cdc_acm_uart0 {
+		compatible = "zephyr,cdc-acm-uart";
+	};
+};
+
+/ {
+	leds {
+		status = "disabled";
+	};
+
+	chosen {
+		zephyr,console = &cdc_acm_uart0;
+		zephyr,shell-uart = &cdc_acm_uart0;
+		zmk,physical-layout = &ec_layout;
+	};
+
+	ec_kscan: ec_kscan {
+		compatible = "zmk,kscan-ec-direct";
+
+		/* Same eight pins, twice: once as MUXPOS values, once as GPIOs.
+		 * Order must match; the backend checks the correspondence. */
+		ain-channels = <0 4 18 19 6 5 7 3>;
+		col-gpios
+			= <&xiao_d 0 GPIO_ACTIVE_HIGH>      /* ROW0_R, PA02 */
+			, <&xiao_d 1 GPIO_ACTIVE_HIGH>      /* ROW1_R, PA04 */
+			, <&xiao_d 2 GPIO_ACTIVE_HIGH>      /* ROW2_R, PA10 */
+			, <&xiao_d 3 GPIO_ACTIVE_HIGH>      /* ROW3_R, PA11 */
+			, <&xiao_d 10 GPIO_ACTIVE_HIGH>     /* ROW0_L, PA06 */
+			, <&xiao_d 9 GPIO_ACTIVE_HIGH>      /* ROW1_L, PA05 */
+			, <&xiao_d 8 GPIO_ACTIVE_HIGH>      /* ROW2_L, PA07 */
+			, <&xiao_d 7 GPIO_ACTIVE_HIGH>      /* ROW3_L, PB09 */
+			;
+
+		/* ACTIVE_LOW on purpose: idle high, falling edge, which is what
+		 * the pull-up prime needs (bias-pull-up in the binding). */
+		strobe-gpios
+			= <&porta 18 GPIO_ACTIVE_LOW>       /* COL0, D27 */
+			, <&porta 22 GPIO_ACTIVE_LOW>       /* COL1, D26 */
+			, <&porta 23 GPIO_ACTIVE_LOW>       /* COL2, D25 */
+			, <&porta 20 GPIO_ACTIVE_LOW>       /* COL3, D20 */
+			, <&porta 19 GPIO_ACTIVE_LOW>       /* COL4, D19 */
+			, <&portb 10 GPIO_ACTIVE_LOW>       /* COL5, D22 */
+			, <&porta 8 GPIO_ACTIVE_LOW>        /* COL6, D4 */
+			, <&portb 11 GPIO_ACTIVE_LOW>       /* COL7, D23 */
+			, <&porta 9 GPIO_ACTIVE_LOW>        /* COL8, D5 */
+			, <&portb 8 GPIO_ACTIVE_LOW>        /* COL9, D6 */
+			;
+
+		/*
+		 * Cut from the assembled board. Raw, a key pressed
+		 * alone reads 284-506 over released, but every held key takes
+		 * 15-20 % off the others on its five-key line: all five down left
+		 * the weakest at 137 and an unpressed key at about -75.
+		 *
+		 * load-comp-scale corrects that. 3850 was fitted from those
+		 * rollover runs and checked on the board: a key reads the same
+		 * with three or four neighbours down and an unpressed one stays
+		 * within +-30 of rest. Compensated, a lone press is 346-671
+		 * (median 498), so 150 is ~43 % of the weakest key and no longer
+		 * moves with what else is held. Idle noise is ~11 counts
+		 * peak-to-peak at rest (20 on ROW0_R) and ~1.5x that under a
+		 * fully held line.
+		 */
+		press-threshold = <150>;
+		release-threshold = <100>;
+		load-comp-scale = <3850>;
+
+		/*
+		 * Pull-up prime, two primes, no dwell. settle-us 0 reads the
+		 * same as 200 on this board (resting levels moved +0.5 on
+		 * average, idle sd unchanged at 1.1-1.5) and takes a fifth of
+		 * the time.
+		 */
+		bias-pull-up;
+		bias-us = <0>;
+		prime-conversions = <2>;
+		settle-us = <0>;
+
+		/*
+		 * 200 Hz. Measured pass, 36 cells, bare pads:
+		 *   NAVG 2  2.55 ms  idle sd 2.1-3.0
+		 *   NAVG 3  3.86 ms  idle sd 1.7-2.3
+		 *   NAVG 4  5.13 ms  idle sd 1.5-2.2   (misses 5 ms; fine at 6)
+		 * with ROW0_R (D0) at about twice those. The floor is the converter:
+		 * a single-shot conversion is 5.0 us and a cell needs four. One
+		 * prime instead of two shifts pedestals (+59 on one cell); not
+		 * used.
+		 */
+		poll-interval-ms = <5>;
+	};
+
+	ec_transform: ec_transform {
+		compatible = "zmk,matrix-transform";
+		columns = <8>;
+		rows = <10>;
+		/* RC(strobe, sense) = RC(board column, sense line); sense lines
+		 * 0-3 are ROW0-3_R, 4-7 are ROW0-3_L. */
+		map = <
+			RC(0,4) RC(1,4) RC(2,4) RC(3,4) RC(4,4) RC(5,0) RC(6,0) RC(7,0) RC(8,0) RC(9,0)
+			RC(0,5) RC(1,5) RC(2,5) RC(3,5) RC(4,5) RC(5,1) RC(6,1) RC(7,1) RC(8,1) RC(9,1)
+			RC(0,6) RC(1,6) RC(2,6) RC(3,6) RC(4,6) RC(5,2) RC(6,2) RC(7,2) RC(8,2) RC(9,2)
+			RC(0,7)                 RC(3,7) RC(4,7) RC(5,3) RC(6,3)                 RC(9,3)
+		>;
+	};
+};

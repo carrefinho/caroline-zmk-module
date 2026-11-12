@@ -1,0 +1,8 @@
+file_format: "1"
+id: caroline
+name: Caroline
+type: shield
+url: https://github.com/carrefinho
+requires: [seeed_xiao]
+features:
+  - keys
