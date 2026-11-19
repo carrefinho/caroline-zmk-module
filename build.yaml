@@ -2,7 +2,7 @@
 include:
   - board: xiao_ble//zmk
     shield: caroline
-  - board: seeeduino_xiao
+  - board: seeeduino_xiao//zmk
     shield: caroline
   - board: xiao_rp2040//zmk
     shield: caroline

@@ -10,7 +10,7 @@ are in `boards/shields/caroline/boards/`.
 | Controller | Board | JP1-JP4 | Power |
 |---|---|---|---|
 | XIAO nRF52840 Plus | `xiao_ble//zmk` | A-C | Battery or USB, BLE |
-| XIAO SAMD21 Plus | `seeeduino_xiao` | C-B | USB only |
+| XIAO SAMD21 Plus | `seeeduino_xiao//zmk` | C-B | USB only |
 | XIAO RP2040 Plus | `xiao_rp2040//zmk` | A-C | USB only |
 
 The jumpers choose whether each row is one sense line of ten keys (A-C) or two
