@@ -6,3 +6,5 @@ include:
     shield: caroline
   - board: xiao_rp2040//zmk
     shield: caroline
+  - board: xiao_ble//zmk
+    shield: settings_reset
