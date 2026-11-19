@@ -73,7 +73,7 @@
 	};
 
 	ec_kscan: ec_kscan {
-		compatible = "zmk,kscan-ec-direct";
+		compatible = "zmk,kscan-direct-ec";
 
 		/* Same four pins, twice: once as AINSEL, once as GPIOs. Order
 		 * must match; the backend checks the correspondence. */

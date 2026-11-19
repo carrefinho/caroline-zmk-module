@@ -2,7 +2,7 @@
 
 ZMK shield for Caroline, a 36-key electrostatic-capacitive keyboard with no
 analog front end. It takes a Seeed XIAO Plus module and scans with
-[zmk-ec-direct](https://github.com/carrefinho/zmk-ec-direct).
+[zmk-direct-ec](https://github.com/carrefinho/zmk-direct-ec).
 
 One shield, `caroline`, covers three controllers. The pins and tuning for each
 are in `boards/shields/caroline/boards/`.

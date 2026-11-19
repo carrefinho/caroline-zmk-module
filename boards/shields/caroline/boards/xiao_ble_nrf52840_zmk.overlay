@@ -51,7 +51,7 @@
 	/* The board's divider (see &vbatt in xiao_ble_zmk.dts), read between
 	 * tripwire passes by the scan thread. */
 	ec_battery: ec_battery {
-		compatible = "zmk,ec-direct-battery";
+		compatible = "zmk,direct-ec-battery";
 		ain-channel = <7>;                      /* P0.31 */
 		power-gpios = <&gpio0 14 (GPIO_OPEN_DRAIN | GPIO_ACTIVE_LOW)>;
 		output-ohms = <510000>;
@@ -59,7 +59,7 @@
 	};
 
 	ec_kscan: ec_kscan {
-		compatible = "zmk,kscan-ec-direct";
+		compatible = "zmk,kscan-direct-ec";
 
 		/* Same four pins twice: once as AIN indices, once as GPIOs.
 		 * Order must match; the driver checks the correspondence. */
