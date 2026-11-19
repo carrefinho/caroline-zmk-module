@@ -43,11 +43,11 @@
 			, <&key_physical_attrs     100     100     205     216    1200     255     266>  /* C */
 			, <&key_physical_attrs     100     100     303     237    1200     353     287>  /* V */
 			, <&key_physical_attrs     100     100     401     258    1200     451     308>  /* B */
-			, <&key_physical_attrs     100     100     674     258 (-1200)     724     308>  /* Enc */
-			, <&key_physical_attrs     100     100     772     237 (-1200)     822     287>  /* N */
-			, <&key_physical_attrs     100     100     870     216 (-1200)     920     266>  /* M */
-			, <&key_physical_attrs     100     100     972     200  (-540)    1022     250>  /* , */
-			, <&key_physical_attrs     100     100    1075     197       0       0       0>  /* . */
+			, <&key_physical_attrs     100     100     674     258 (-1200)     724     308>  /* N */
+			, <&key_physical_attrs     100     100     772     237 (-1200)     822     287>  /* M */
+			, <&key_physical_attrs     100     100     870     216 (-1200)     920     266>  /* , */
+			, <&key_physical_attrs     100     100     972     200  (-540)    1022     250>  /* . */
+			, <&key_physical_attrs     100     100    1075     197       0       0       0>  /* / */
 			, <&key_physical_attrs     125     100      12     297       0       0       0>  /* LCtrl */
 			, <&key_physical_attrs     125     100     282     337    1200     345     387>  /* LMod */
 			, <&key_physical_attrs     150     100     404     366    1200     479     416>  /* LSpc */
